@@ -117,6 +117,41 @@ describe("MarkdownViewer file label", () => {
   });
 });
 
+describe("MarkdownViewer HTML files", () => {
+  it("renders an iframe pointing at the raw endpoint instead of source", async () => {
+    vi.mocked(fetchFileContent).mockResolvedValue({
+      content: "<!DOCTYPE html><html><body><h1>Hi</h1></body></html>",
+      baseDir: "/repo",
+    });
+    const { container } = renderViewer({ fileId: "ccc33333", fileName: "page.html" });
+
+    const iframe = await waitFor(() => {
+      const el = container.querySelector("iframe");
+      if (!el) throw new Error("iframe not yet rendered");
+      return el;
+    });
+    const src = iframe.getAttribute("src") ?? "";
+    expect(src).toMatch(
+      /^\/_\/api\/groups\/default\/files\/ccc33333\/raw\/page\.html\?_=/,
+    );
+    // It must NOT fall through to the syntax-highlighted source view.
+    expect(container.querySelector("pre")).toBeNull();
+  });
+
+  it("hides the TOC and Raw toggles for HTML files", async () => {
+    vi.mocked(fetchFileContent).mockResolvedValue({
+      content: "<html></html>",
+      baseDir: "/repo",
+    });
+    const { container } = renderViewer({ fileId: "ccc33333", fileName: "page.html" });
+    await waitFor(() => {
+      if (!container.querySelector("iframe")) throw new Error("iframe not yet rendered");
+    });
+    expect(screen.queryByRole("button", { name: /raw/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /table of contents|toc/i })).toBeNull();
+  });
+});
+
 describe("MarkdownViewer relative links", () => {
   beforeEach(() => {
     vi.mocked(fetchFileContent).mockResolvedValue({

@@ -348,7 +348,7 @@ export function App() {
 
   const { isDragging } = useFileDrop(activeGroup);
 
-  const currentViewMode: ViewMode = viewModes[activeGroup] ?? "flat";
+  const currentViewMode: ViewMode = viewModes[activeGroup] ?? "tree";
 
   useEffect(() => {
     localStorage.setItem(VIEWMODE_STORAGE_KEY, JSON.stringify(viewModes));
@@ -384,7 +384,7 @@ export function App() {
 
   const handleViewModeToggle = useCallback(() => {
     setViewModes((prev) => {
-      const current = prev[activeGroup] ?? "flat";
+      const current = prev[activeGroup] ?? "tree";
       const nextMode: ViewMode = current === "flat" ? "tree" : "flat";
       return { ...prev, [activeGroup]: nextMode };
     });

@@ -17,17 +17,23 @@ import { RawToggle } from "./RawToggle";
 import { TocToggle } from "./TocToggle";
 import { CopyButton } from "./CopyButton";
 import { CloseFileButton } from "./CloseFileButton";
-import { resolveLink, resolveImageSrc, extractLanguage } from "../utils/resolve";
+import { resolveLink, resolveImageSrc, extractLanguage, rawFileUrl } from "../utils/resolve";
 import { buildRelativeOpenUrl } from "../utils/groups";
 import { parseFrontmatter } from "../utils/frontmatter";
 import { stripMdxSyntax } from "../utils/mdx";
-import { isMarkdownFile, detectLanguage } from "../utils/filetype";
+import { isMarkdownFile, isHtmlFile, detectLanguage } from "../utils/filetype";
 import { formatFileLabel } from "../utils/fileLabel";
 import type { ZoomContent } from "./ZoomModal";
 import type { TocHeading } from "./TocPanel";
 import type { Components } from "react-markdown";
 import "github-markdown-css/github-markdown.css";
 import type { FontSize } from "./FontSizeToggle";
+
+// A per-page-load token appended to HTML iframe URLs. It makes each browser
+// session request a URL it has never cached, sidestepping a stale cached
+// response (e.g. an older CSP that forbade framing) being reused for the
+// iframe. The server also sends Cache-Control: no-store for raw HTML.
+const HTML_VIEW_SESSION = Date.now().toString(36);
 
 // Strip the `user-content-` prefix that remark-gfm bakes into footnote IDs,
 // so rehype-sanitize can re-add it exactly once (avoiding double-prefixed IDs).
@@ -706,6 +712,7 @@ export function MarkdownViewer({
   );
 
   const isMarkdown = isMarkdownFile(fileName);
+  const isHtml = isHtmlFile(fileName);
   const codeLanguage = isMarkdown ? null : detectLanguage(fileName);
 
   const parsed = useMemo(
@@ -714,6 +721,20 @@ export function MarkdownViewer({
   );
 
   const renderedContent = useMemo(() => {
+    if (isHtml) {
+      // Render the HTML document live in an iframe. The src points at the raw
+      // endpoint using the file's own name, so the browser resolves the page's
+      // relative assets against the same /raw/ base (served from its directory).
+      // No sandbox: mo is a local, single-user tool and the file is trusted.
+      return (
+        <iframe
+          title={fileName}
+          src={`${rawFileUrl(activeGroup, fileId, fileName)}?_=${HTML_VIEW_SESSION}`}
+          className="block w-full rounded-md border border-gh-border bg-white"
+          style={{ height: "calc(100vh - 8rem)" }}
+        />
+      );
+    }
     if (!isMarkdown) {
       return <HighlightedView content={content} language={codeLanguage!} />;
     }
@@ -741,7 +762,7 @@ export function MarkdownViewer({
         </Markdown>
       </>
     );
-  }, [content, isRawView, isMarkdown, codeLanguage, parsed, components, fileName]);
+  }, [content, isRawView, isMarkdown, isHtml, codeLanguage, parsed, components, fileName, activeGroup, fileId]);
 
   const prevHeadingsKey = useRef("");
   useEffect(() => {

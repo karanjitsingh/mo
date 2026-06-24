@@ -43,8 +43,11 @@ const (
 	// probeTimeoutDefault is used when the server is expected to be running.
 	probeTimeoutDefault = 2 * time.Second
 
-	markdownGlob          = "*.md"
-	markdownGlobRecursive = "**/*.md"
+	// Viewable file globs used when a directory or bare glob is given. Includes
+	// Markdown plus HTML so `mo dir/` surfaces .html/.htm files too (they render
+	// in an iframe). Brace alternation is supported by doublestar.
+	markdownGlob          = "*.{md,html,htm}"
+	markdownGlobRecursive = "**/*.{md,html,htm}"
 )
 
 var (
@@ -689,7 +692,7 @@ func resolveArgs(args []string, watchMode, recursive bool) (files, patterns []st
 				return nil, nil, err
 			}
 			if len(matches) == 0 {
-				return nil, nil, fmt.Errorf("no .md files in %s", abs)
+				return nil, nil, fmt.Errorf("no .md/.html files in %s", abs)
 			}
 			files = append(files, matches...)
 			continue

@@ -8,17 +8,37 @@ import { FileIcon } from "./FileIcon";
 
 const COLLAPSED_STORAGE_KEY = "mo-sidebar-tree-collapsed";
 
-function getInitialCollapsed(group: string): Set<string> {
+// collectFolderPaths returns the fullPath of every directory node in the tree
+// (depth-first). Used to collapse all folders by default.
+function collectFolderPaths(node: TreeNode): string[] {
+  const paths: string[] = [];
+  for (const child of node.children) {
+    if (child.file == null) {
+      paths.push(child.fullPath);
+      paths.push(...collectFolderPaths(child));
+    }
+  }
+  return paths;
+}
+
+// getInitialCollapsed returns the set of collapsed folder paths for a group.
+// If the user has a saved state for this group we honor it; otherwise we
+// default to ALL folders collapsed so the tree opens fully folded.
+function getInitialCollapsed(group: string, tree: TreeNode): Set<string> {
   try {
     const stored = localStorage.getItem(COLLAPSED_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (parsed[group]) return new Set(parsed[group]);
+      // Use bracket access so a saved empty array (user expanded everything)
+      // is respected rather than treated as "no saved state".
+      if (Object.prototype.hasOwnProperty.call(parsed, group)) {
+        return new Set(parsed[group]);
+      }
     }
   } catch {
     /* ignore */
   }
-  return new Set();
+  return new Set(collectFolderPaths(tree));
 }
 
 interface TreeViewProps {
@@ -57,12 +77,12 @@ export function TreeView({
   const tree = useMemo(() => buildTree(files), [files]);
   const [prevGroup, setPrevGroup] = useState(activeGroup);
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() =>
-    getInitialCollapsed(activeGroup),
+    getInitialCollapsed(activeGroup, tree),
   );
 
   if (prevGroup !== activeGroup) {
     setPrevGroup(activeGroup);
-    setCollapsedPaths(getInitialCollapsed(activeGroup));
+    setCollapsedPaths(getInitialCollapsed(activeGroup, tree));
   }
 
   useEffect(() => {

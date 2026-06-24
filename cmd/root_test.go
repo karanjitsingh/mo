@@ -182,7 +182,7 @@ func TestResolveUnwatchArgs_Directory(t *testing.T) {
 	if len(patterns) != 1 {
 		t.Fatalf("got %d patterns, want 1", len(patterns))
 	}
-	want := filepath.Join(dir, "*.md")
+	want := filepath.Join(dir, "*.{md,html,htm}")
 	if patterns[0] != want {
 		t.Errorf("got pattern %q, want %q", patterns[0], want)
 	}
@@ -939,7 +939,7 @@ func TestResolveArgs_DirectoryWithWatch(t *testing.T) {
 	if len(patterns) != 1 {
 		t.Fatalf("got %d patterns, want 1", len(patterns))
 	}
-	want := filepath.Join(dir, "*.md")
+	want := filepath.Join(dir, "*.{md,html,htm}")
 	if patterns[0] != want {
 		t.Errorf("got pattern %q, want %q", patterns[0], want)
 	}
@@ -959,7 +959,7 @@ func TestResolveArgs_DirectoryWithWatchRecursive(t *testing.T) {
 	if len(patterns) != 1 {
 		t.Fatalf("got %d patterns, want 1", len(patterns))
 	}
-	want := filepath.Join(dir, "**/*.md")
+	want := filepath.Join(dir, "**/*.{md,html,htm}")
 	if patterns[0] != want {
 		t.Errorf("got pattern %q, want %q", patterns[0], want)
 	}
@@ -1036,7 +1036,7 @@ func TestResolveArgs_EmptyDirectory(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty directory")
 	}
-	if !strings.Contains(err.Error(), "no .md files") {
+	if !strings.Contains(err.Error(), "no .md/.html files") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }

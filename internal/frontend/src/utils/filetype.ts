@@ -5,6 +5,15 @@ export function isMarkdownFile(fileName: string): boolean {
   return markdownExtensions.has(ext);
 }
 
+const htmlExtensions = new Set(["html", "htm"]);
+
+// isHtmlFile reports whether a file should be rendered as a live HTML document
+// (in an iframe) rather than as Markdown or syntax-highlighted source.
+export function isHtmlFile(fileName: string): boolean {
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  return htmlExtensions.has(ext);
+}
+
 // Map file extension to Shiki language identifier.
 // Returns "text" for unknown extensions.
 const extToLang: Record<string, string> = {

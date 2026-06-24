@@ -1906,6 +1906,20 @@ func handleFileRaw(state *State) http.HandlerFunc {
 		absPath := filepath.Join(filepath.Dir(entry.Path), relPath)
 		absPath = filepath.Clean(absPath)
 
+		// HTML files are rendered inside the SPA's iframe. The global CSP
+		// (withCSP) sets `frame-ancestors 'none'`, which blocks framing, and its
+		// strict script/style sources would neuter the page's own inline scripts
+		// and CDN assets. Relax the CSP for raw HTML so the document renders
+		// faithfully and can be framed by the same-origin app. mo is a local,
+		// single-user tool serving the user's own files to their own browser.
+		if ext := strings.ToLower(filepath.Ext(absPath)); ext == ".html" || ext == ".htm" {
+			w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
+			// Prevent the browser from reusing a previously cached response
+			// (and its stale CSP headers) via a 304, which would otherwise keep
+			// applying an old frame-ancestors policy and block framing.
+			w.Header().Set("Cache-Control", "no-store, must-revalidate")
+		}
+
 		// No boundary check: mo serves local files to the user's own browser
 		// (like handleOpenFile); http.ServeFile already rejects "..".
 		http.ServeFile(w, r, absPath)
