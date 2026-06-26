@@ -15,6 +15,7 @@ export interface Group {
 export interface FileContent {
   content: string;
   baseDir: string;
+  modTime?: string;
 }
 
 export interface VersionInfo {

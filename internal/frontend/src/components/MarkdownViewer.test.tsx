@@ -112,8 +112,32 @@ describe("MarkdownViewer file label", () => {
   it("right-aligns the label text", async () => {
     renderViewer({ title: "Project Readme", filePath: "/home/me/code/mo/docs/README.md" });
 
-    const label = await screen.findByTitle("/home/me/code/mo/docs/README.md");
-    expect(label).toHaveClass("text-right");
+    await screen.findByTitle("/home/me/code/mo/docs/README.md");
+    expect(screen.getByTestId("file-label")).toHaveClass("text-right");
+  });
+});
+
+describe("MarkdownViewer modified timestamp", () => {
+  it("shows the file's last-modified timestamp on the left", async () => {
+    vi.mocked(fetchFileContent).mockResolvedValue({
+      content: "# Hello",
+      baseDir: "/repo",
+      modTime: "2026-06-26T07:43:00Z",
+    });
+    renderViewer({ filePath: "/home/me/docs/README.md" });
+
+    const ts = await screen.findByTestId("file-modified");
+    expect(ts.textContent).toMatch(/2026/);
+    // The filename/title still renders on the right.
+    expect(screen.getByTestId("file-label").textContent).toBe("README.md");
+  });
+
+  it("leaves the timestamp empty when the server provides none", async () => {
+    vi.mocked(fetchFileContent).mockResolvedValue({ content: "# Hello", baseDir: "/repo" });
+    renderViewer({ filePath: "/home/me/docs/README.md" });
+
+    await screen.findByTestId("file-label");
+    expect(screen.getByTestId("file-modified").textContent).toBe("");
   });
 });
 

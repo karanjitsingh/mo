@@ -1359,6 +1359,9 @@ type AddPatternResponse struct {
 type fileContentResponse struct {
 	Content string `json:"content"`
 	BaseDir string `json:"baseDir"`
+	// ModTime is the file's last-modified time (RFC3339, UTC). Empty for
+	// uploaded/in-memory files that have no on-disk timestamp.
+	ModTime string `json:"modTime,omitempty"`
 }
 
 type searchAnchor struct {
@@ -1667,6 +1670,9 @@ func handleFileContent(state *State) http.HandlerFunc {
 			resp = fileContentResponse{
 				Content: string(content),
 				BaseDir: filepath.Dir(entry.Path),
+			}
+			if info, statErr := os.Stat(entry.Path); statErr == nil {
+				resp.ModTime = info.ModTime().UTC().Format(time.RFC3339)
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")

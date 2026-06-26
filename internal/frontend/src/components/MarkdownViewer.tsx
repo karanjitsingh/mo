@@ -35,6 +35,21 @@ import type { FontSize } from "./FontSizeToggle";
 // iframe. The server also sends Cache-Control: no-store for raw HTML.
 const HTML_VIEW_SESSION = Date.now().toString(36);
 
+// Format a file's last-modified time (RFC3339 from the server) for display in
+// the sticky label bar. Returns "" when absent (e.g. uploaded files).
+function formatModTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // Strip the `user-content-` prefix that remark-gfm bakes into footnote IDs,
 // so rehype-sanitize can re-add it exactly once (avoiding double-prefixed IDs).
 function rehypeStripClobberPrefix() {
@@ -557,6 +572,7 @@ export function MarkdownViewer({
   searchQuery,
 }: MarkdownViewerProps) {
   const [content, setContent] = useState("");
+  const [modTime, setModTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRawView, setIsRawView] = useState(false);
   const [searchHitMarkers, setSearchHitMarkers] = useState<SearchHitMarker[]>([]);
@@ -579,6 +595,7 @@ export function MarkdownViewer({
       .then((data) => {
         if (!cancelled) {
           setContent(data.content);
+          setModTime(data.modTime ?? null);
           setLoading(false);
         }
       })
@@ -894,10 +911,21 @@ export function MarkdownViewer({
             through. */}
         <div
           ref={stickyLabelRef}
-          className={`sticky -top-8 z-20 mx-auto mb-4 border-b border-gh-border bg-gh-bg py-2 text-sm font-medium text-right text-gh-text-secondary overflow-hidden text-ellipsis whitespace-nowrap${isWide ? "" : " max-w-[980px]"}`}
+          className={`sticky -top-8 z-20 mx-auto mb-4 flex items-center justify-between gap-3 border-b border-gh-border bg-gh-bg py-2 text-sm font-medium text-gh-text-secondary${isWide ? "" : " max-w-[980px]"}`}
           title={!uploaded && filePath ? filePath : fileName}
         >
-          {showFullLabel ? formatFileLabel(fileName, title) : fileName}
+          <span
+            className="shrink-0 text-xs font-normal tabular-nums text-gh-text-secondary/70 whitespace-nowrap"
+            data-testid="file-modified"
+          >
+            {formatModTime(modTime)}
+          </span>
+          <span
+            className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right"
+            data-testid="file-label"
+          >
+            {showFullLabel ? formatFileLabel(fileName, title) : fileName}
+          </span>
         </div>
         <article
           ref={articleRef}
