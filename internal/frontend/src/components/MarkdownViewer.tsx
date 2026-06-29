@@ -16,6 +16,7 @@ import { escapeRegExp } from "../utils/regex";
 import { RawToggle } from "./RawToggle";
 import { TocToggle } from "./TocToggle";
 import { CopyButton } from "./CopyButton";
+import { DownloadButton } from "./DownloadButton";
 import { CloseFileButton } from "./CloseFileButton";
 import { resolveLink, resolveImageSrc, extractLanguage, rawFileUrl } from "../utils/resolve";
 import { buildRelativeOpenUrl } from "../utils/groups";
@@ -951,6 +952,7 @@ export function MarkdownViewer({
         {isMarkdown && <TocToggle isTocOpen={isTocOpen} onToggle={onTocToggle} />}
         {isMarkdown && <RawToggle isRaw={isRawView} onToggle={() => setIsRawView((v) => !v)} />}
         <CopyButton content={content} />
+        <DownloadButton content={content} fileName={fileName} />
         <CloseFileButton onClose={onRemoveFile} uploaded={uploaded} />
       </div>
     </div>
