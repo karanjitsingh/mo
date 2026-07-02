@@ -4,6 +4,7 @@ import { MarkdownViewer } from "./components/MarkdownViewer";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { FontSizeToggle, type FontSize } from "./components/FontSizeToggle";
 import { WidthToggle } from "./components/WidthToggle";
+import { FullscreenToggle } from "./components/FullscreenToggle";
 import { GroupDropdown } from "./components/GroupDropdown";
 import { ViewModeToggle, type ViewMode } from "./components/ViewModeToggle";
 import { SearchToggle } from "./components/SearchToggle";
@@ -35,7 +36,7 @@ import {
   groupToPath,
   buildFileUrl,
 } from "./utils/groups";
-import { isMarkdownFile } from "./utils/filetype";
+import { isMarkdownFile, isHtmlFile } from "./utils/filetype";
 import { formatFileLabel } from "./utils/fileLabel";
 
 const VIEWMODE_STORAGE_KEY = "mo-sidebar-viewmode";
@@ -127,6 +128,13 @@ export function App() {
     }
   });
   const [fontSize, setFontSize] = useState<FontSize>(getInitialFontSize);
+  // Fullscreen (focus) mode: expands the content to full width and maximizes the
+  // content area within its container by hiding the ToC panel, content title bar,
+  // the content's side button column, and the restart button. The left sidebar
+  // stays available (toggle it from the header). Content keeps its base padding
+  // except for HTML files, whose iframe fills the space. Intentionally ephemeral
+  // (not persisted) so a reload or Escape always provides a way out.
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const knownFileIds = useRef<Set<string>>(new Set());
   const [initialFileId, setInitialFileId] = useState<string | null>(() => {
     const fromUrl = parseFileIdFromSearch(window.location.search);
@@ -374,6 +382,16 @@ export function App() {
     }
   }, [isWide]);
 
+  // Allow Escape to exit fullscreen mode.
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFullscreen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isFullscreen]);
+
   useEffect(() => {
     try {
       localStorage.setItem(FONT_SIZE_STORAGE_KEY, fontSize);
@@ -517,6 +535,10 @@ export function App() {
         <div className="ml-auto flex items-center gap-2">
           <FontSizeToggle fontSize={fontSize} onChange={setFontSize} />
           <WidthToggle isWide={isWide} onToggle={() => setIsWide((v) => !v)} />
+          <FullscreenToggle
+            isFullscreen={isFullscreen}
+            onToggle={() => setIsFullscreen((v) => !v)}
+          />
           <ThemeToggle />
         </div>
       </header>
@@ -540,7 +562,7 @@ export function App() {
         <main className="flex-1 flex flex-col overflow-hidden">
           <div
             ref={setScrollContainer}
-            className="flex-1 overflow-y-auto overscroll-contain p-8 bg-gh-bg"
+            className={`flex-1 overflow-y-auto overscroll-contain bg-gh-bg${isFullscreen && isHtmlFile(activeFileName) ? "" : " p-8"}`}
           >
             {activeFileId != null ? (
               <MarkdownViewer
@@ -558,8 +580,9 @@ export function App() {
                 onTocToggle={() => setTocOpen(!tocOpen)}
                 onRemoveFile={handleRemoveFile}
                 uploaded={activeFile?.uploaded}
-                isWide={isWide}
+                isWide={isWide || isFullscreen}
                 fontSize={fontSize}
+                isFullscreen={isFullscreen}
                 onZoom={handleZoom}
                 scrollToHeading={pendingSearchHeading}
                 onScrolledToHeading={() => setPendingSearchHeading(null)}
@@ -570,7 +593,7 @@ export function App() {
             )}
           </div>
         </main>
-        {tocOpen && (
+        {tocOpen && !isFullscreen && (
           <TocPanel
             headings={headings}
             activeHeadingId={activeHeadingId}
@@ -578,7 +601,7 @@ export function App() {
           />
         )}
       </div>
-      <RestartButton />
+      {!isFullscreen && <RestartButton />}
       {isDragging && <DropOverlay />}
       {zoomContent && <ZoomModal content={zoomContent} onClose={handleZoomClose} />}
     </div>

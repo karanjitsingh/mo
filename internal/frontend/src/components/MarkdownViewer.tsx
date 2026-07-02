@@ -103,6 +103,7 @@ interface MarkdownViewerProps {
   uploaded?: boolean;
   isWide: boolean;
   fontSize: FontSize;
+  isFullscreen?: boolean;
   onZoom?: (content: ZoomContent) => void;
   scrollToHeading?: string | null;
   onScrolledToHeading?: () => void;
@@ -567,6 +568,7 @@ export function MarkdownViewer({
   uploaded,
   isWide,
   fontSize,
+  isFullscreen = false,
   onZoom,
   scrollToHeading,
   onScrolledToHeading,
@@ -749,7 +751,7 @@ export function MarkdownViewer({
           title={fileName}
           src={`${rawFileUrl(activeGroup, fileId, fileName)}?_=${HTML_VIEW_SESSION}`}
           className="block w-full rounded-md border border-gh-border bg-white"
-          style={{ height: "calc(100vh - 8rem)" }}
+          style={{ height: isFullscreen ? "calc(100vh - 3rem)" : "calc(100vh - 8rem)" }}
         />
       );
     }
@@ -780,7 +782,7 @@ export function MarkdownViewer({
         </Markdown>
       </>
     );
-  }, [content, isRawView, isMarkdown, isHtml, codeLanguage, parsed, components, fileName, activeGroup, fileId]);
+  }, [content, isRawView, isMarkdown, isHtml, codeLanguage, parsed, components, fileName, activeGroup, fileId, isFullscreen]);
 
   const prevHeadingsKey = useRef("");
   useEffect(() => {
@@ -909,25 +911,27 @@ export function MarkdownViewer({
         {/* Always-visible sticky label. The negative top cancels the scroll
             container's p-8 top padding so the bar pins flush under the global
             header instead of leaving a gap that scrolling content would show
-            through. */}
-        <div
-          ref={stickyLabelRef}
-          className={`sticky -top-8 z-20 mx-auto mb-4 flex items-center justify-between gap-3 border-b border-gh-border bg-gh-bg py-2 text-sm font-medium text-gh-text-secondary${isWide ? "" : " max-w-[980px]"}`}
-          title={!uploaded && filePath ? filePath : fileName}
-        >
-          <span
-            className="shrink-0 text-xs font-normal tabular-nums text-gh-text-secondary/70 whitespace-nowrap"
-            data-testid="file-modified"
+            through. Hidden in fullscreen mode. */}
+        {!isFullscreen && (
+          <div
+            ref={stickyLabelRef}
+            className={`sticky -top-8 z-20 mx-auto mb-4 flex items-center justify-between gap-3 border-b border-gh-border bg-gh-bg py-2 text-sm font-medium text-gh-text-secondary${isWide ? "" : " max-w-[980px]"}`}
+            title={!uploaded && filePath ? filePath : fileName}
           >
-            {formatModTime(modTime)}
-          </span>
-          <span
-            className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right"
-            data-testid="file-label"
-          >
-            {showFullLabel ? formatFileLabel(fileName, title) : fileName}
-          </span>
-        </div>
+            <span
+              className="shrink-0 text-xs font-normal tabular-nums text-gh-text-secondary/70 whitespace-nowrap"
+              data-testid="file-modified"
+            >
+              {formatModTime(modTime)}
+            </span>
+            <span
+              className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right"
+              data-testid="file-label"
+            >
+              {showFullLabel ? formatFileLabel(fileName, title) : fileName}
+            </span>
+          </div>
+        )}
         <article
           ref={articleRef}
           className={`markdown-body relative overflow-visible${isWide ? " markdown-body--wide" : ""}${fontSize !== "medium" ? ` markdown-body--${fontSize}` : ""}`}
@@ -948,13 +952,15 @@ export function MarkdownViewer({
           {renderedContent}
         </article>
       </div>
-      <div className="shrink-0 flex flex-col gap-2 -mr-4 -mt-4 sticky -top-4">
-        {isMarkdown && <TocToggle isTocOpen={isTocOpen} onToggle={onTocToggle} />}
-        {isMarkdown && <RawToggle isRaw={isRawView} onToggle={() => setIsRawView((v) => !v)} />}
-        <CopyButton content={content} />
-        <DownloadButton content={content} fileName={fileName} />
-        <CloseFileButton onClose={onRemoveFile} uploaded={uploaded} />
-      </div>
+      {!isFullscreen && (
+        <div className="shrink-0 flex flex-col gap-2 -mr-4 -mt-4 sticky -top-4">
+          {isMarkdown && <TocToggle isTocOpen={isTocOpen} onToggle={onTocToggle} />}
+          {isMarkdown && <RawToggle isRaw={isRawView} onToggle={() => setIsRawView((v) => !v)} />}
+          <CopyButton content={content} />
+          <DownloadButton content={content} fileName={fileName} />
+          <CloseFileButton onClose={onRemoveFile} uploaded={uploaded} />
+        </div>
+      )}
     </div>
   );
 }
