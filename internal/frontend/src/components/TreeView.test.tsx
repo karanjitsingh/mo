@@ -61,4 +61,40 @@ describe("TreeView default collapse", () => {
     renderTree();
     expect(screen.getByText("guide.md")).toBeInTheDocument();
   });
+
+  it("collapses by default once a fresh group's files arrive asynchronously", () => {
+    // Reproduces the real-world bug: a fresh -t group has no files at first
+    // render (not yet in the groups list), so the tree is empty. The transient
+    // empty state must NOT be persisted as "expanded"; once files arrive the
+    // folders should default to collapsed.
+    const props = {
+      activeGroup: "fresh",
+      activeFileId: null,
+      showTitle: false,
+      menuOpenId: null,
+      otherGroups: [],
+      onFileSelect: () => {},
+      onMenuToggle: () => {},
+      onOpenInNewTab: () => {},
+      onCopyPath: () => {},
+      onCopyLink: () => {},
+      onMoveToGroup: () => {},
+      onRemove: () => {},
+      menuRef: createRef<HTMLDivElement>(),
+    };
+
+    const { rerender } = render(<TreeView files={[]} {...props} />);
+
+    // No premature empty state should have been persisted for the group.
+    const afterEmpty = localStorage.getItem("mo-sidebar-tree-collapsed");
+    expect(afterEmpty == null || JSON.parse(afterEmpty).fresh == null).toBe(true);
+
+    // Files arrive.
+    rerender(<TreeView files={files} {...props} />);
+
+    // Folder shows collapsed by default: folder visible, children hidden.
+    expect(screen.getByText("docs")).toBeInTheDocument();
+    expect(screen.queryByText("guide.md")).toBeNull();
+    expect(screen.queryByText("api.md")).toBeNull();
+  });
 });

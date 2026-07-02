@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FileEntry, Group } from "../hooks/useApi";
 import { buildTree, type TreeNode } from "../utils/buildTree";
 import { buildFileUrl } from "../utils/groups";
@@ -41,6 +41,20 @@ function getInitialCollapsed(group: string, tree: TreeNode): Set<string> {
   return new Set(collectFolderPaths(tree));
 }
 
+// hasSavedCollapsedState reports whether the user has a persisted collapse
+// state for the group. A deliberately empty array (user expanded everything)
+// counts as saved state and must be honored.
+function hasSavedCollapsedState(group: string): boolean {
+  try {
+    const stored = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    if (!stored) return false;
+    const parsed = JSON.parse(stored);
+    return Object.prototype.hasOwnProperty.call(parsed, group);
+  } catch {
+    return false;
+  }
+}
+
 interface TreeViewProps {
   files: FileEntry[];
   activeGroup: string;
@@ -75,17 +89,41 @@ export function TreeView({
   menuRef,
 }: TreeViewProps) {
   const tree = useMemo(() => buildTree(files), [files]);
+  const folderPaths = useMemo(() => collectFolderPaths(tree), [tree]);
+
   const [prevGroup, setPrevGroup] = useState(activeGroup);
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() =>
     getInitialCollapsed(activeGroup, tree),
+  );
+  // Whether we've applied a "real" default for the current group yet. A fresh
+  // group's files load asynchronously, so the first render(s) can have an empty
+  // tree; we must not persist that transient empty state (it would be read back
+  // as "user expanded everything" and permanently defeat collapse-by-default).
+  const seededRef = useRef(
+    hasSavedCollapsedState(activeGroup) || folderPaths.length > 0,
   );
 
   if (prevGroup !== activeGroup) {
     setPrevGroup(activeGroup);
     setCollapsedPaths(getInitialCollapsed(activeGroup, tree));
+    seededRef.current =
+      hasSavedCollapsedState(activeGroup) || folderPaths.length > 0;
   }
 
+  // Once a fresh group's folders arrive, apply the collapsed-by-default state
+  // (unless the user already has a saved state for it).
   useEffect(() => {
+    if (seededRef.current) return;
+    if (hasSavedCollapsedState(activeGroup) || folderPaths.length > 0) {
+      setCollapsedPaths(getInitialCollapsed(activeGroup, tree));
+      seededRef.current = true;
+    }
+  }, [activeGroup, folderPaths, tree]);
+
+  // Persist collapse state, but only after the group has been seeded so we
+  // never overwrite the saved default with a transient empty set.
+  useEffect(() => {
+    if (!seededRef.current) return;
     try {
       const stored = localStorage.getItem(COLLAPSED_STORAGE_KEY);
       const all = stored ? JSON.parse(stored) : {};
