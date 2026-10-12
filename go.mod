@@ -8,7 +8,6 @@ require (
 	github.com/k1LoW/donegroup v1.10.3
 	github.com/k1LoW/errors v1.2.0
 	github.com/muesli/termenv v0.16.0
-	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/text v0.38.0
 )

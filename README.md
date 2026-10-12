@@ -259,9 +259,9 @@ $ mo --status --json
 |------|-------|---------|-------------|
 | `--target` | `-t` | `default` | Group name |
 | `--port` | `-p` | `6275` | Server port |
-| `--bind` | `-b` | `localhost` | Bind address (e.g. `0.0.0.0`) |
-| `--open` | | | Always open browser |
-| `--no-open` | | | Never open browser |
+| `--bind` | `-b` | `0.0.0.0` | Bind address (non-loopback is restricted to localhost, LAN and Tailscale) |
+| `--open` | | | No-op (browser opening is disabled) |
+| `--no-open` | | | No-op (browser opening is disabled) |
 | `--status` | | | Show all running mo servers |
 | `--watch` | `-w` | `false` | Treat directory and glob arguments as watch patterns |
 | `--unwatch` | | `false` | Remove watched patterns for the given directory or glob arguments |
@@ -275,7 +275,7 @@ $ mo --status --json
 | `--dangerously-allow-remote-access` | | | Allow remote access without authentication (trusted networks only) |
 
 > [!WARNING]
-> Binding to a non-localhost address exposes mo to the network **without any authentication**. Remote clients can read any file accessible by the user, browse the filesystem via glob patterns, and shut down the server. A confirmation prompt is shown when `--bind` is set to a non-loopback address.
+> mo has **no authentication**. With a non-loopback `--bind` (the default), only localhost, private LAN and Tailscale clients are accepted; others get a 403. `--dangerously-allow-remote-access` removes that restriction (a confirmation prompt is shown), letting any reachable client read files accessible by the user, browse the filesystem via glob patterns, and shut down the server.
 
 ## Build
 

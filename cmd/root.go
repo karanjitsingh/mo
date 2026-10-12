@@ -31,7 +31,6 @@ import (
 	"github.com/k1LoW/mo/internal/server"
 	"github.com/k1LoW/mo/version"
 	"github.com/muesli/termenv"
-	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
@@ -167,11 +166,14 @@ Watch mode and glob patterns:
 
   $ mo -R docs/                       Open every .md under docs/ once
 
-WARNING: --bind with a non-loopback address:
-  Binding to a non-localhost address (e.g. 0.0.0.0) exposes mo to the
-  network without any authentication. Remote clients can read any file
-  accessible by this user, browse the filesystem via glob patterns, and
-  shut down the server. A confirmation prompt is shown before starting.`,
+--bind with a non-loopback address:
+  Binding to a non-localhost address (e.g. 0.0.0.0) lets other devices
+  reach mo, e.g. over your LAN or Tailscale. mo has no authentication,
+  so by default access is restricted to localhost, private LAN ranges
+  (10/8, 172.16/12, 192.168/16, fe80::/10), and Tailscale (100.64.0.0/10,
+  fd7a:115c:a1e0::/48); other clients get a 403. Pass
+  --dangerously-allow-remote-access to remove that restriction and
+  accept connections from anywhere (a confirmation prompt is shown).`,
 	Args:    cobra.ArbitraryArgs,
 	RunE:    run,
 	Version: version.Version,
@@ -186,9 +188,9 @@ func Execute() {
 func init() {
 	rootCmd.Flags().StringVarP(&target, "target", "t", server.DefaultGroup, "Tab group name")
 	rootCmd.Flags().IntVarP(&port, "port", "p", 6275, "Server port")
-	rootCmd.Flags().StringVarP(&bind, "bind", "b", "localhost", "Bind address (e.g. localhost, 0.0.0.0)")
-	rootCmd.Flags().BoolVar(&open, "open", false, "Always open browser (even when adding to existing group)")
-	rootCmd.Flags().BoolVar(&noOpen, "no-open", false, "Do not open browser automatically")
+	rootCmd.Flags().StringVarP(&bind, "bind", "b", "0.0.0.0", "Bind address (e.g. localhost, 0.0.0.0). Non-loopback binds are restricted to localhost/LAN/Tailscale unless --dangerously-allow-remote-access is set")
+	rootCmd.Flags().BoolVar(&open, "open", false, "No-op (browser opening is disabled); accepted for compatibility")
+	rootCmd.Flags().BoolVar(&noOpen, "no-open", false, "No-op (browser opening is disabled); accepted for compatibility")
 	rootCmd.MarkFlagsMutuallyExclusive("open", "no-open")
 	rootCmd.Flags().BoolVar(&shutdownServer, "shutdown", false, "Shut down the running mo server on the specified port")
 	rootCmd.Flags().BoolVar(&restartServer, "restart", false, "Restart the running mo server on the specified port")
@@ -455,32 +457,35 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Prompt only when actually starting a new server (not adding to existing one).
 	if !isLoopbackBind(bind) {
-		slog.Warn("binding to non-loopback address", "bind", bind, "dangerously-allow-remote-access", dangerouslyAllowRemoteAccess)
-	}
-	if !isLoopbackBind(bind) && !dangerouslyAllowRemoteAccess {
-		if stdinData != nil {
-			return fmt.Errorf("cannot use redirected stdin with non-loopback bind without --dangerously-allow-remote-access")
-		}
-		o := termenv.NewOutput(os.Stderr)
-		c := func(s string) termenv.Style { return o.String(s).Foreground(o.Color("208")) }
-		fmt.Fprintln(os.Stderr, c("SECURITY WARNING:").Bold(),
-			c(fmt.Sprintf("Binding to %s instead of localhost. mo has no authentication -- remote clients can:", bind)))
-		fmt.Fprintln(os.Stderr, c("  - Read any file accessible by this user"))
-		fmt.Fprintln(os.Stderr, c("  - Browse the filesystem via glob patterns"))
-		fmt.Fprintln(os.Stderr, c("  - Shut down or restart the server"))
-		fmt.Fprintf(os.Stderr, "Continue? [y/N] ")
-		scanner := bufio.NewScanner(os.Stdin)
-		if !scanner.Scan() {
-			if err := scanner.Err(); err != nil {
-				return err
+		if dangerouslyAllowRemoteAccess {
+			slog.Warn("binding to non-loopback address with remote access fully open (no IP restriction)", "bind", bind)
+			if stdinData != nil {
+				return fmt.Errorf("cannot use redirected stdin with non-loopback bind and --dangerously-allow-remote-access (confirmation prompt requires interactive stdin)")
 			}
-			fmt.Fprintln(os.Stderr, "mo: canceled")
-			return nil
-		}
-		ans := strings.ToLower(strings.TrimSpace(scanner.Text()))
-		if ans != "y" && ans != "yes" {
-			fmt.Fprintln(os.Stderr, "mo: canceled")
-			return nil
+			o := termenv.NewOutput(os.Stderr)
+			c := func(s string) termenv.Style { return o.String(s).Foreground(o.Color("208")) }
+			fmt.Fprintln(os.Stderr, c("SECURITY WARNING:").Bold(),
+				c(fmt.Sprintf("Binding to %s with --dangerously-allow-remote-access. mo has no authentication -- ANY client that can reach this address can:", bind)))
+			fmt.Fprintln(os.Stderr, c("  - Read any file accessible by this user"))
+			fmt.Fprintln(os.Stderr, c("  - Browse the filesystem via glob patterns"))
+			fmt.Fprintln(os.Stderr, c("  - Shut down or restart the server"))
+			fmt.Fprintf(os.Stderr, "Continue? [y/N] ")
+			scanner := bufio.NewScanner(os.Stdin)
+			if !scanner.Scan() {
+				if err := scanner.Err(); err != nil {
+					return err
+				}
+				fmt.Fprintln(os.Stderr, "mo: canceled")
+				return nil
+			}
+			ans := strings.ToLower(strings.TrimSpace(scanner.Text()))
+			if ans != "y" && ans != "yes" {
+				fmt.Fprintln(os.Stderr, "mo: canceled")
+				return nil
+			}
+		} else {
+			slog.Info("binding to non-loopback address; restricting access to localhost, private LAN, and Tailscale networks", "bind", bind)
+			fmt.Fprintf(os.Stderr, "mo: binding to %s -- access restricted to localhost, private LAN, and Tailscale networks (use --dangerously-allow-remote-access to allow all clients)\n", bind)
 		}
 	}
 
@@ -1361,7 +1366,10 @@ func startServer(ctx context.Context, addr string, filesByGroup map[string][]str
 		return fmt.Errorf("all %d file(s) were skipped", totalFiles)
 	}
 
-	handler := server.NewHandler(state)
+	var handler http.Handler = server.NewHandler(state)
+	if !isLoopbackBind(bind) && !dangerouslyAllowRemoteAccess {
+		handler = restrictToPrivateNetworks(handler)
+	}
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -1482,6 +1490,7 @@ func startBackground(addr string, filesByGroup map[string][]string, patternsByGr
 }
 
 func openBrowser(addr string) {
+	// Browser opening is disabled (mo often runs over SSH); flags are kept as no-ops.
 	if noOpen {
 		return
 	}
@@ -1489,9 +1498,7 @@ func openBrowser(addr string) {
 	if target != server.DefaultGroup {
 		url = fmt.Sprintf("%s/%s", url, target)
 	}
-	if err := browser.OpenURL(url); err != nil {
-		slog.Warn("could not open browser", "error", err)
-	}
+	slog.Info("url", "url", url)
 }
 
 func waitForReady(addr string, timeout time.Duration) (*statusResponse, error) {

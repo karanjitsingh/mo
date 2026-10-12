@@ -58,8 +58,8 @@ cd internal/frontend && pnpm run dev
 
 - `--port` / `-p` — Server port (default: 6275)
 - `--target` / `-t` — Tab group name (default: `"default"`)
-- `--open` — Always open browser
-- `--no-open` — Never open browser
+- `--bind` / `-b` — Bind address (default: `0.0.0.0`, restricted to localhost/LAN/Tailscale unless `--dangerously-allow-remote-access`)
+- `--open` / `--no-open` — No-ops (browser opening is disabled)
 - `--watch` / `-w` — Boolean flag that turns on watch mode; directory and glob positional arguments are registered as watch patterns
 - `--unwatch` — Boolean flag that removes watched patterns; directory and glob positional arguments specify which patterns to unwatch (with `-R`, a directory removes all patterns under it)
 - `--recursive` / `-R` — Recurse into subdirectories when a directory is given as an argument (expands `*.md` → `**/*.md`)
