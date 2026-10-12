@@ -349,6 +349,39 @@ export function Sidebar({
       <nav className="flex flex-col pb-1">
         {isSearching ? (
           <>
+            {files.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-3 pt-2 pb-1 text-left text-xs font-semibold uppercase tracking-wide text-gh-text-secondary"
+                  onClick={() => setFileMatchesOpen((v) => !v)}
+                  aria-expanded={fileMatchesOpen}
+                >
+                  <span>File name matches</span>
+                  <span className="text-sm leading-none">{fileMatchesOpen ? "−" : "+"}</span>
+                </button>
+                {fileMatchesOpen &&
+                  files.map((f) => (
+                    <FileItem
+                      key={f.id}
+                      file={f}
+                      activeGroup={activeGroup}
+                      isActive={f.id === activeFileId}
+                      showTitle={showTitle}
+                      menuOpenId={menuOpenId}
+                      otherGroups={otherGroups}
+                      onFileSelect={onFileSelect}
+                      onMenuToggle={handleMenuToggle}
+                      onOpenInNewTab={handleOpenInNewTab}
+                      onCopyPath={handleCopyPath}
+                      onCopyLink={handleCopyLink}
+                      onMoveToGroup={handleMoveToGroup}
+                      onRemove={handleRemove}
+                      menuRef={menuRef}
+                    />
+                  ))}
+              </>
+            )}
             {searchLoading ? (
               <div className="px-3 py-2 text-sm text-gh-text-secondary">Searching contents...</div>
             ) : searchResults.length > 0 ? (
@@ -408,39 +441,6 @@ export function Sidebar({
                   )}
               </>
             ) : null}
-            {files.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between px-3 pt-2 pb-1 text-left text-xs font-semibold uppercase tracking-wide text-gh-text-secondary"
-                  onClick={() => setFileMatchesOpen((v) => !v)}
-                  aria-expanded={fileMatchesOpen}
-                >
-                  <span>File name matches</span>
-                  <span className="text-sm leading-none">{fileMatchesOpen ? "−" : "+"}</span>
-                </button>
-                {fileMatchesOpen &&
-                  files.map((f) => (
-                    <FileItem
-                      key={f.id}
-                      file={f}
-                      activeGroup={activeGroup}
-                      isActive={f.id === activeFileId}
-                      showTitle={showTitle}
-                      menuOpenId={menuOpenId}
-                      otherGroups={otherGroups}
-                      onFileSelect={onFileSelect}
-                      onMenuToggle={handleMenuToggle}
-                      onOpenInNewTab={handleOpenInNewTab}
-                      onCopyPath={handleCopyPath}
-                      onCopyLink={handleCopyLink}
-                      onMoveToGroup={handleMoveToGroup}
-                      onRemove={handleRemove}
-                      menuRef={menuRef}
-                    />
-                  ))}
-              </>
-            )}
             {!searchLoading && searchResults.length === 0 && files.length === 0 && (
               <div className="px-3 py-2 text-sm text-gh-text-secondary">No matches found</div>
             )}
