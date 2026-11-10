@@ -10,6 +10,7 @@ export interface Group {
   name: string;
   files: FileEntry[];
   patterns?: string[];
+  excludedDirs?: string[];
 }
 
 export interface FileContent {
@@ -89,6 +90,36 @@ export async function openRelativeFile(
 export async function removeFile(group: string, id: string): Promise<void> {
   const res = await fetch(`${groupPath(group)}/files/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to remove file");
+}
+
+export async function unwatchPattern(group: string, pattern: string): Promise<void> {
+  const res = await fetch("/_/api/patterns", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pattern, group }),
+  });
+  if (!res.ok) throw new Error("Failed to unwatch pattern");
+}
+
+export async function excludeDir(group: string, dir: string): Promise<void> {
+  const res = await fetch("/_/api/excludes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dir, group }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text.trim() || "Failed to ignore path");
+  }
+}
+
+export async function includeDir(group: string, dir: string): Promise<void> {
+  const res = await fetch("/_/api/excludes", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dir, group }),
+  });
+  if (!res.ok) throw new Error("Failed to remove ignored path");
 }
 
 export async function reorderFiles(groupName: string, fileIds: string[]): Promise<void> {

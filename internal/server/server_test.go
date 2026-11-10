@@ -2377,3 +2377,62 @@ func TestHandleFileRaw_PercentEncodedNonASCII(t *testing.T) {
 		t.Errorf("expected body to contain %q, got %q", "asset content", got)
 	}
 }
+
+func TestExcludeDir(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "sub")
+	os.Mkdir(sub, 0o750)                                           //nolint:errcheck
+	os.WriteFile(filepath.Join(dir, "a.md"), []byte("# A"), 0o600) //nolint:errcheck
+	os.WriteFile(filepath.Join(sub, "b.md"), []byte("# B"), 0o600) //nolint:errcheck
+
+	s := newTestState(t)
+	if _, err := s.AddPattern(filepath.Join(dir, "**", "*.md"), DefaultGroup); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(s.Groups()[0].Files); got != 2 {
+		t.Fatalf("got %d files, want 2", got)
+	}
+
+	if closed := s.ExcludeDir(sub, DefaultGroup); closed != 1 {
+		t.Fatalf("closed %d files, want 1", closed)
+	}
+	if got := len(s.Groups()[0].Files); got != 1 {
+		t.Fatalf("got %d files after exclude, want 1", got)
+	}
+
+	// New matches under the excluded dir are skipped.
+	s.matchAndAddFile(filepath.Join(sub, "b.md"), s.Patterns())
+	if got := len(s.Groups()[0].Files); got != 1 {
+		t.Fatalf("excluded file re-added: got %d files", got)
+	}
+
+	if !s.IncludeDir(sub, DefaultGroup) {
+		t.Fatal("IncludeDir returned false")
+	}
+	s.matchAndAddFile(filepath.Join(sub, "b.md"), s.Patterns())
+	if got := len(s.Groups()[0].Files); got != 2 {
+		t.Fatalf("got %d files after include, want 2", got)
+	}
+}
+
+func TestMatchesExclusion(t *testing.T) {
+	tests := []struct {
+		entry, path string
+		want        bool
+	}{
+		{"/p/sub", "/p/sub/a.md", true},
+		{"/p/sub", "/p/subx/a.md", false},
+		{"/p/**/node_modules", "/p/a/node_modules/x/b.md", true},
+		{"/p/**/node_modules", "/p/a/b.md", false},
+		{"node_modules", "/p/a/node_modules/b.md", true},
+		{"**/drafts", "/p/drafts/b.md", true},
+		{"a/drafts", "/p/a/drafts/b.md", true},
+		{"drafts", "/p/draftsy/b.md", false},
+		{"*.tmp.md", "/p/x.tmp.md", true},
+	}
+	for _, tt := range tests {
+		if got := matchesExclusion(tt.entry, tt.path); got != tt.want {
+			t.Errorf("matchesExclusion(%q, %q) = %v, want %v", tt.entry, tt.path, got, tt.want)
+		}
+	}
+}

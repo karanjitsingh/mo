@@ -3,13 +3,15 @@ import type { FileEntry } from "../hooks/useApi";
 export interface TreeNode {
   name: string;
   fullPath: string;
+  // Absolute directory path (directory nodes only; empty for uploaded/root).
+  dir: string;
   children: TreeNode[];
   file: FileEntry | null;
 }
 
 export function buildTree(files: FileEntry[]): TreeNode {
   if (files.length === 0) {
-    return { name: "", fullPath: "", children: [], file: null };
+    return { name: "", fullPath: "", dir: "", children: [], file: null };
   }
 
   // Separate uploaded files from filesystem files
@@ -18,11 +20,12 @@ export function buildTree(files: FileEntry[]): TreeNode {
 
   if (fsFiles.length === 0) {
     // All files are uploaded — flat list at root
-    const root: TreeNode = { name: "", fullPath: "", children: [], file: null };
+    const root: TreeNode = { name: "", fullPath: "", dir: "", children: [], file: null };
     for (const file of uploadedFiles) {
       root.children.push({
         name: file.name,
         fullPath: `uploaded:${file.id}`,
+        dir: "",
         children: [],
         file,
       });
@@ -40,7 +43,13 @@ export function buildTree(files: FileEntry[]): TreeNode {
   const prefixLen = commonPrefix.length;
 
   // Build a trie from relative paths
-  const root: TreeNode = { name: "", fullPath: "", children: [], file: null };
+  const root: TreeNode = {
+    name: "",
+    fullPath: "",
+    dir: commonPrefix.join("/"),
+    children: [],
+    file: null,
+  };
 
   for (let fi = 0; fi < fsFiles.length; fi++) {
     const file = fsFiles[fi];
@@ -54,6 +63,7 @@ export function buildTree(files: FileEntry[]): TreeNode {
         child = {
           name: segment,
           fullPath: current.fullPath ? `${current.fullPath}/${segment}` : segment,
+          dir: `${current.dir}/${segment}`,
           children: [],
           file: null,
         };
@@ -65,6 +75,7 @@ export function buildTree(files: FileEntry[]): TreeNode {
     current.children.push({
       name: file.name,
       fullPath: current.fullPath ? `${current.fullPath}/${file.name}` : file.name,
+      dir: "",
       children: [],
       file,
     });
@@ -75,6 +86,7 @@ export function buildTree(files: FileEntry[]): TreeNode {
     root.children.push({
       name: file.name,
       fullPath: `uploaded:${file.id}`,
+      dir: "",
       children: [],
       file,
     });
@@ -114,6 +126,7 @@ function collapseSingleChild(node: TreeNode): void {
       child = {
         name: `${child.name}/${grandchild.name}`,
         fullPath: grandchild.fullPath,
+        dir: grandchild.dir,
         children: grandchild.children,
         file: null,
       };

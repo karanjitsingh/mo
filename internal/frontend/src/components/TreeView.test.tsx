@@ -19,6 +19,8 @@ function renderTree() {
       showTitle={false}
       menuOpenId={null}
       otherGroups={[]}
+      patterns={[]}
+      onUnwatch={() => {}}
       onFileSelect={() => {}}
       onMenuToggle={() => {}}
       onOpenInNewTab={() => {}}
@@ -73,6 +75,8 @@ describe("TreeView default collapse", () => {
       showTitle: false,
       menuOpenId: null,
       otherGroups: [],
+      patterns: [],
+      onUnwatch: () => {},
       onFileSelect: () => {},
       onMenuToggle: () => {},
       onOpenInNewTab: () => {},

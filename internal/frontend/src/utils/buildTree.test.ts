@@ -150,3 +150,14 @@ describe("buildTree", () => {
     expect(root.children[2].file?.id).toBe("3");
   });
 });
+
+describe("buildTree dir", () => {
+  it("sets absolute dir on directory nodes, including collapsed chains", () => {
+    const tree = buildTree([
+      { id: "a", name: "a.md", path: "/p/x/y/a.md" },
+      { id: "b", name: "b.md", path: "/p/z/b.md" },
+    ]);
+    const dirs = tree.children.map((c) => c.dir).sort();
+    expect(dirs).toEqual(["/p/x/y", "/p/z"]);
+  });
+});

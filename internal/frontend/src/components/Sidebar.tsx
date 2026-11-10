@@ -15,8 +15,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { FileEntry, Group, SearchResult } from "../hooks/useApi";
-import { removeFile, moveFile } from "../hooks/useApi";
+import { removeFile, moveFile, unwatchPattern, excludeDir } from "../hooks/useApi";
 import { buildFileUrl } from "../utils/groups";
+import { patternsCoveringDir, patternsUnderDir } from "../utils/patterns";
 import { isPlainLeftClick } from "../utils/linkClick";
 import { escapeRegExp } from "../utils/regex";
 import type { ViewMode } from "./ViewModeToggle";
@@ -322,6 +323,28 @@ export function Sidebar({
     [activeGroup],
   );
 
+  const groupPatterns = useMemo(
+    () => groups.find((g) => g.name === activeGroup)?.patterns ?? [],
+    [groups, activeGroup],
+  );
+
+  const handleUnwatch = useCallback(
+    async (dir: string) => {
+      setMenuOpenId(null);
+      try {
+        await Promise.all(
+          patternsUnderDir(groupPatterns, dir).map((p) => unwatchPattern(activeGroup, p)),
+        );
+        if (patternsCoveringDir(groupPatterns, dir).length > 0) {
+          await excludeDir(activeGroup, dir);
+        }
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "Failed to unwatch folder");
+      }
+    },
+    [activeGroup, groupPatterns],
+  );
+
   const handleMenuToggle = useCallback((id: string) => {
     setMenuOpenId((prev) => (prev === id ? null : id));
   }, []);
@@ -453,6 +476,8 @@ export function Sidebar({
             showTitle={showTitle}
             menuOpenId={menuOpenId}
             otherGroups={otherGroups}
+            patterns={groupPatterns}
+            onUnwatch={handleUnwatch}
             onFileSelect={onFileSelect}
             onMenuToggle={handleMenuToggle}
             onOpenInNewTab={handleOpenInNewTab}

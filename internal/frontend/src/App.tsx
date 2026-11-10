@@ -8,6 +8,7 @@ import { FullscreenToggle } from "./components/FullscreenToggle";
 import { GroupDropdown } from "./components/GroupDropdown";
 import { ViewModeToggle, type ViewMode } from "./components/ViewModeToggle";
 import { SearchToggle } from "./components/SearchToggle";
+import { IgnoredPathsButton } from "./components/IgnoredPathsButton";
 import { TitleToggle } from "./components/TitleToggle";
 import { RestartButton } from "./components/RestartButton";
 import { DropOverlay } from "./components/DropOverlay";
@@ -532,6 +533,10 @@ export function App() {
         <ViewModeToggle viewMode={currentViewMode} onToggle={handleViewModeToggle} />
         <TitleToggle showTitle={currentShowTitle} onToggle={handleTitleToggle} />
         <SearchToggle isOpen={searchQuery != null} onToggle={handleSearchToggle} />
+        <IgnoredPathsButton
+          group={activeGroup}
+          paths={groups.find((g) => g.name === activeGroup)?.excludedDirs ?? []}
+        />
         <div className="ml-auto flex items-center gap-2">
           <FontSizeToggle fontSize={fontSize} onChange={setFontSize} />
           <WidthToggle isWide={isWide} onToggle={() => setIsWide((v) => !v)} />

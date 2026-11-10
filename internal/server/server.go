@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -185,15 +186,16 @@ func (gp *GlobPattern) IsRecursive() bool {
 }
 
 type State struct {
-	mu          sync.RWMutex
-	groups      map[string]*Group
-	subscribers map[chan sseEvent]struct{}
-	subMu       sync.RWMutex
-	watcher     *fswatcher.Watcher
-	restartCh   chan string
-	shutdownCh  chan struct{}
-	patterns    []*GlobPattern
-	watchedDirs map[string]int // directory → reference count
+	mu           sync.RWMutex
+	groups       map[string]*Group
+	subscribers  map[chan sseEvent]struct{}
+	subMu        sync.RWMutex
+	watcher      *fswatcher.Watcher
+	restartCh    chan string
+	shutdownCh   chan struct{}
+	patterns     []*GlobPattern
+	excludedDirs map[string][]string // group → directories skipped by glob discovery
+	watchedDirs  map[string]int      // directory → reference count
 	// pathAliases maps a canonical (symlink-resolved) path back to the
 	// original path we stored. The fswatcher watcher canonicalizes paths,
 	// so events arrive with the resolved form (e.g. /private/var/...) while
@@ -232,6 +234,7 @@ func NewState(ctx context.Context) *State {
 		aliasReverse:       make(map[string]string),
 		fileChangeDebounce: defaultFileChangeDebounce,
 		fileChangeTimers:   make(map[string]*time.Timer),
+		excludedDirs:       make(map[string][]string),
 	}
 
 	if w != nil {
@@ -695,6 +698,9 @@ func (s *State) AddPattern(absPattern, groupName string) ([]*FileEntry, error) {
 	var entries []*FileEntry
 	for _, m := range matches {
 		abs := filepath.Join(base, m)
+		if s.isExcluded(abs, groupName) {
+			continue
+		}
 		entry, err := s.AddFile(abs, groupName)
 		if err != nil {
 			slog.Warn("skipping file", "path", abs, "error", err)
@@ -706,6 +712,117 @@ func (s *State) AddPattern(absPattern, groupName string) ([]*FileEntry, error) {
 	s.watchDirsForPattern(gp)
 
 	return entries, nil
+}
+
+func cleanExclusion(e string) string {
+	e = strings.TrimSpace(e)
+	if hasGlobMeta(e) {
+		return e
+	}
+	return filepath.Clean(e)
+}
+
+// SetExcludedDirs replaces the excluded directories (used when restoring a session).
+func (s *State) SetExcludedDirs(dirs map[string][]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.excludedDirs = make(map[string][]string, len(dirs))
+	for g, ds := range dirs {
+		s.excludedDirs[g] = append([]string(nil), ds...)
+	}
+}
+
+// ExcludedDirsForGroup returns the directories excluded from glob discovery in a group.
+func (s *State) ExcludedDirsForGroup(groupName string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]string(nil), s.excludedDirs[groupName]...)
+}
+
+// isExcluded reports whether path is ignored by an entry of the group.
+func (s *State) isExcluded(path, groupName string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, e := range s.excludedDirs[groupName] {
+		if matchesExclusion(e, path) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasGlobMeta(s string) bool {
+	return strings.ContainsAny(s, "*?[{")
+}
+
+// matchesExclusion reports whether path is at or under what entry names. An
+// entry is an absolute directory, an absolute glob, or a relative glob that
+// may match at any depth (e.g. "node_modules" or "**/drafts").
+func matchesExclusion(entry, path string) bool {
+	p := filepath.ToSlash(path)
+	e := filepath.ToSlash(entry)
+	if filepath.IsAbs(entry) {
+		if !hasGlobMeta(e) {
+			return p == e || strings.HasPrefix(p, e+"/")
+		}
+	} else {
+		p = strings.TrimPrefix(p, "/")
+		if !strings.HasPrefix(e, "**/") {
+			e = "**/" + e
+		}
+	}
+	if ok, _ := doublestar.Match(e, p); ok {
+		return true
+	}
+	ok, _ := doublestar.Match(e+"/**", p)
+	return ok
+}
+
+// ExcludeDir stops glob patterns from adding files matching dir (a directory
+// or glob, see matchesExclusion) to the group and closes the files already open there. Explicitly added files are unaffected
+// afterwards. Returns the number of files closed.
+func (s *State) ExcludeDir(dir, groupName string) int {
+	dir = cleanExclusion(dir)
+	s.mu.Lock()
+	if s.excludedDirs == nil {
+		s.excludedDirs = make(map[string][]string)
+	}
+	if !slices.Contains(s.excludedDirs[groupName], dir) {
+		s.excludedDirs[groupName] = append(s.excludedDirs[groupName], dir)
+	}
+	var paths []string
+	if g, ok := s.groups[groupName]; ok {
+		for _, f := range g.Files {
+			if !f.Uploaded && matchesExclusion(dir, f.Path) {
+				paths = append(paths, f.ID)
+			}
+		}
+	}
+	s.mu.Unlock()
+
+	for _, id := range paths {
+		s.RemoveFile(id, groupName)
+	}
+	slog.Info("directory excluded", "dir", dir, "group", groupName, "closed", len(paths))
+	s.mu.Lock()
+	s.sendEvent(sseEvent{Name: eventUpdate, Data: "{}"})
+	s.mu.Unlock()
+	return len(paths)
+}
+
+// IncludeDir removes dir from the group's exclusions. Returns false if it was not excluded.
+func (s *State) IncludeDir(dir, groupName string) bool {
+	dir = cleanExclusion(dir)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	dirs := s.excludedDirs[groupName]
+	i := slices.Index(dirs, dir)
+	if i < 0 {
+		return false
+	}
+	s.excludedDirs[groupName] = slices.Delete(dirs, i, i+1)
+	s.sendEvent(sseEvent{Name: eventUpdate, Data: "{}"})
+	return true
 }
 
 // Patterns returns a copy of all registered glob patterns.
@@ -774,6 +891,7 @@ type UploadedFileData struct {
 type RestoreData struct {
 	Groups        map[string][]string `json:"groups"`
 	Patterns      map[string][]string `json:"patterns,omitempty"`
+	ExcludedDirs  map[string][]string `json:"excludedDirs,omitempty"`
 	UploadedFiles []UploadedFileData  `json:"uploadedFiles,omitempty"`
 }
 
@@ -833,6 +951,13 @@ func (s *State) snapshotRestoreData() RestoreData {
 			paths = append(paths, f.Path)
 		}
 		data.Groups[name] = paths
+	}
+
+	if len(s.excludedDirs) > 0 {
+		data.ExcludedDirs = make(map[string][]string, len(s.excludedDirs))
+		for g, dirs := range s.excludedDirs {
+			data.ExcludedDirs[g] = append([]string(nil), dirs...)
+		}
 	}
 
 	if len(s.patterns) > 0 {
@@ -1318,6 +1443,9 @@ func (s *State) matchAndAddFile(path string, patterns []*GlobPattern) {
 			continue
 		}
 		if matched {
+			if s.isExcluded(path, gp.Group) {
+				return
+			}
 			if _, err := s.AddFile(path, gp.Group); err != nil {
 				slog.Warn("skipping file", "path", path, "error", err)
 				return
@@ -1422,6 +1550,8 @@ func NewHandler(state *State) http.Handler {
 	mux.HandleFunc("POST /_/api/groups/{group}/files/open", handleOpenFile(state))
 	mux.HandleFunc("POST /_/api/patterns", handleAddPattern(state))
 	mux.HandleFunc("DELETE /_/api/patterns", handleRemovePattern(state))
+	mux.HandleFunc("POST /_/api/excludes", handleExcludeDir(state))
+	mux.HandleFunc("DELETE /_/api/excludes", handleIncludeDir(state))
 	mux.HandleFunc("POST /_/api/restart", handleRestart(state))
 	mux.HandleFunc("POST /_/api/shutdown", handleShutdown(state))
 	mux.HandleFunc("GET /_/api/status", handleStatus(state))
@@ -1618,8 +1748,9 @@ func handleGroups(state *State) http.HandlerFunc {
 				g.Files = []*FileEntry{}
 			}
 			result[i] = statusGroup{
-				Group:    g,
-				Patterns: patternsByGroup[g.Name],
+				Group:        g,
+				Patterns:     patternsByGroup[g.Name],
+				ExcludedDirs: state.ExcludedDirsForGroup(g.Name),
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -2036,6 +2167,54 @@ func handleRemovePattern(state *State) http.HandlerFunc {
 	}
 }
 
+type excludeRequest struct {
+	Dir   string `json:"dir"`
+	Group string `json:"group"`
+}
+
+func decodeExcludeRequest(w http.ResponseWriter, r *http.Request) (excludeRequest, string, bool) {
+	var req excludeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return req, "", false
+	}
+	if strings.TrimSpace(req.Dir) == "" || !doublestar.ValidatePattern(filepath.ToSlash(req.Dir)) {
+		http.Error(w, "invalid path or glob pattern", http.StatusBadRequest)
+		return req, "", false
+	}
+	group, err := ResolveGroupName(req.Group)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return req, "", false
+	}
+	return req, group, true
+}
+
+func handleExcludeDir(state *State) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req, group, ok := decodeExcludeRequest(w, r)
+		if !ok {
+			return
+		}
+		state.ExcludeDir(req.Dir, group)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleIncludeDir(state *State) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req, group, ok := decodeExcludeRequest(w, r)
+		if !ok {
+			return
+		}
+		if !state.IncludeDir(req.Dir, group) {
+			http.Error(w, "directory not excluded", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func handleRestart(state *State) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		restoreFile, err := state.ExportState()
@@ -2067,7 +2246,8 @@ func handleShutdown(state *State) http.HandlerFunc {
 
 type statusGroup struct {
 	Group
-	Patterns []string `json:"patterns,omitempty"`
+	Patterns     []string `json:"patterns,omitempty"`
+	ExcludedDirs []string `json:"excludedDirs,omitempty"`
 }
 
 func handleStatus(state *State) http.HandlerFunc {
