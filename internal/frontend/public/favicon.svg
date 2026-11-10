@@ -1,13 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="208" height="128" viewBox="0 0 208 128">
-  <!-- Markdown mark by Dustin Curtis, released into the public domain (CC0). -->
-  <style>
-    .mk-stroke { stroke: #000; fill: none; }
-    .mk-fill { fill: #000; }
-    @media (prefers-color-scheme: dark) {
-      .mk-stroke { stroke: #fff; }
-      .mk-fill { fill: #fff; }
-    }
-  </style>
-  <rect class="mk-stroke" width="198" height="118" x="5" y="5" ry="10" stroke-width="10"/>
-  <path class="mk-fill" d="M30 98V30h20l20 25 20-25h20v68H90V59L70 84 50 59v39zm125 0l-30-33h20V30h20v35h20z"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#be185d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 17V7l4.5 4.5L11.5 7v10"/><path d="M18 7v10"/><path d="m14.5 13.5 3.5 3.5 3.5-3.5"/></svg>
